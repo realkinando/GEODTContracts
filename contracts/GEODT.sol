@@ -47,7 +47,7 @@ contract GEODT {
     }
 
     function getEth(MetaTransaction calldata metaTx, bytes32 r, bytes32 s, uint8 v) external {
-
+        require(tx.gasprice*gasleft()>metaTx.fee);
         bytes32 digest = keccak256(
             abi.encodePacked(
                     "\x19\x01",
