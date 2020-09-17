@@ -20,10 +20,12 @@ contract GEODT {
     struct MetaTransaction {
 		uint256 nonce;
 		address from;
+        address feeReceiver;
         address token;
         uint tokenAmount;
         uint minEth;
         uint deadline;
+        uint256 fee;
     }
 
     mapping(address => uint256) public nonces;
@@ -31,7 +33,7 @@ contract GEODT {
     keccak256(bytes("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"));
 
     bytes32 internal constant META_TRANSACTION_TYPEHASH =
-    keccak256(bytes("MetaTransaction(uint256 nonce,address from,address token,uint tokenAmount,uint minEth,uint deadline)"));
+    keccak256(bytes("MetaTransaction(uint256 nonce,address from,address feeReceiver,address token,uint tokenAmount,uint minEth,uint deadline,uint256 fee)"));
     bytes32 internal DOMAIN_SEPARATOR = keccak256(abi.encode(
         EIP712_DOMAIN_TYPEHASH,
 		keccak256(bytes("GEODT")),
@@ -50,7 +52,7 @@ contract GEODT {
             abi.encodePacked(
                     "\x19\x01",
                     DOMAIN_SEPARATOR,
-                    keccak256(abi.encode(META_TRANSACTION_TYPEHASH, metaTx.nonce, metaTx.from, metaTx.token,
+                    keccak256(abi.encode(META_TRANSACTION_TYPEHASH, metaTx.nonce, metaTx.from, metaTx.feeReceiver,metaTx.token,
                     metaTx.tokenAmount, metaTx.minEth,metaTx.deadline))
                 )
             );
@@ -67,10 +69,12 @@ contract GEODT {
         }
         IUniswapV2Router02 ROUTER = IUniswapV2Router02(routerAddress);
         require(TOKEN.transferFrom(metaTx.from, address(this), castedAmount),"token from User to GEODT failed");
-        try ROUTER.swapExactTokensForETH(metaTx.tokenAmount,metaTx.minEth, path,metaTx.from,metaTx.deadline) {}
+        try ROUTER.swapExactTokensForETH(metaTx.tokenAmount,metaTx.minEth, path,address(this),metaTx.deadline) {}
         catch (bytes memory reason){
             revert("swap call failed");
         }
+        payable(metaTx.feeReceiver).transfer(metaTx.fee);
+        payable(metaTx.from).transfer(address(this).balance);
     }
 
 }
