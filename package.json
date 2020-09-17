@@ -1,0 +1,30 @@
+{
+  "name": "geodt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "buidler.config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@makerdao/dai": "^0.31.6",
+    "@makerdao/dai-plugin-mcd": "^1.5.10",
+    "@openzeppelin/contracts": "^3.0.2",
+    "@uniswap/v2-periphery": "^1.1.0-beta.0",
+    "chai": "^4.2.0",
+    "eth-revert-reason": "^1.0.3",
+    "eth-sig-util": "^2.5.3"
+  },
+  "devDependencies": {
+    "@nomiclabs/buidler": "^1.3.8",
+    "@nomiclabs/buidler-ethers": "^2.0.0",
+    "@nomiclabs/buidler-waffle": "^2.0.0",
+    "ethereum-waffle": "^3.0.0",
+    "ethers": "^5.0.3"
+  }
+}
