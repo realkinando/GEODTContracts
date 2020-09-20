@@ -1,12 +1,15 @@
-pragma solidity ^0.6.8;
+pragma solidity =0.6.6;
 pragma experimental ABIEncoderV2;
 
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
 contract GEODT {
 
-    address constant public routerAddress = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
+    using SafeMath for uint;
+
+    address public routerAddress;
 
     address public WETH;
     
@@ -42,18 +45,21 @@ contract GEODT {
 		address(this)
     ));
 
-    constructor(address _WETH) public{
+    constructor(address _WETH, address _router) public{
         WETH = _WETH;
+        routerAddress = _router;
     }
 
+    receive() external payable {}
+
     function getEth(MetaTransaction calldata metaTx, bytes32 r, bytes32 s, uint8 v) external {
-        require(tx.gasprice*gasleft()>metaTx.fee);
+        require(tx.gasprice.mul(gasleft())<metaTx.fee,"Gas Cost Exceeds Fee");
         bytes32 digest = keccak256(
             abi.encodePacked(
                     "\x19\x01",
                     DOMAIN_SEPARATOR,
                     keccak256(abi.encode(META_TRANSACTION_TYPEHASH, metaTx.nonce, metaTx.from, metaTx.feeReceiver,metaTx.token,
-                    metaTx.tokenAmount, metaTx.minEth,metaTx.deadline))
+                    metaTx.tokenAmount, metaTx.minEth,metaTx.deadline,metaTx.fee))
                 )
             );
         require(metaTx.from != address(0), "invalid-address-0");
@@ -71,8 +77,9 @@ contract GEODT {
         require(TOKEN.transferFrom(metaTx.from, address(this), castedAmount),"token from User to GEODT failed");
         try ROUTER.swapExactTokensForETH(metaTx.tokenAmount,metaTx.minEth, path,address(this),metaTx.deadline) {}
         catch (bytes memory reason){
-            revert("swap call failed");
+            revert(string(abi.encodePacked("swap call failed",reason)));
         }
+        require(metaTx.fee<address(this).balance,"fee exceeds balance");
         payable(metaTx.feeReceiver).transfer(metaTx.fee);
         payable(metaTx.from).transfer(address(this).balance);
     }
