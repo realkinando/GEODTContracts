@@ -20,6 +20,8 @@ describe("GEODT", function() {
 
   let domainData;
 
+  let daiDomainData;
+
   const domainType = [
     { name: "name", type: "string" },
     { name: "version", type: "string" },
@@ -36,6 +38,14 @@ describe("GEODT", function() {
     { name: "minEth" , type : "uint"},
     { name: "deadline" , type : "uint"},
     { name: "fee", type : "uint256"}
+  ];
+
+  const permitType = [
+    { name: "holder", type: "address"},
+    { name: "spender", type: "address"},
+    { name: "nonce", type: "uint256"},
+    { name: "expiry", type: "uint256"},
+    { name: "allowed", type: "bool"}
   ];
 
   before(async function() {
@@ -80,6 +90,13 @@ describe("GEODT", function() {
       verifyingContract : geodt.address
     };
 
+    daiDomainData = {
+      name : "TestnetDAI",
+      version : "1",
+      chainId : 42,
+      verifyingContract : testnetDAI.address
+    }
+
     //add liquidity to pair (400 Dai : 1 Eth) x 1000
     //we do this manually cos of a weird Uniswap Router bug that only exists in the local testing environment
     await uniswapV2Factory.createPair(weth9.address,testnetDAI.address);
@@ -95,10 +112,6 @@ describe("GEODT", function() {
                                       await accounts[0].getAddress(),Math.floor(Date.now()/1000)+1000);
     console.log("Liquidity Added");**/
 
-    //approve geodt to spend accounts[1] dai
-    await testnetDAI.connect(accounts[1]).approve(geodt.address,ethers.utils.parseEther("10000000000000000000000000"));
-    console.log("Account[0] approved geodt");
-
   });
 
   //1sends correct amount of eth to user
@@ -113,6 +126,10 @@ describe("GEODT", function() {
     //give accounts[1] 1000 Dai
     await testnetDAI.mint(await accounts[1].getAddress(),ethers.utils.parseEther("1000"));
     console.log("Account[1] Debited");
+
+    //approve geodt to spend accounts[1] dai
+    await testnetDAI.connect(accounts[1]).approve(geodt.address,ethers.utils.parseEther("10000000000000000000000000"));
+    console.log("Account[0] approved geodt");
 
     let message = {
       nonce: 0,
@@ -140,7 +157,7 @@ describe("GEODT", function() {
       //let bsObj = {data:dataToSign};
       //let sigCall = sigUtil.signTypedData_v4(privateKeyBuffer,bsObj);
       const result = await ethers.provider.send("eth_signTypedData",[message.from,dataToSign]);
-      console.log("success",result);
+      //console.log("success",result);
       const signature = result.substring(2);
       const r = "0x" + signature.substring(0, 64);
       const s = "0x" + signature.substring(64, 128);
@@ -192,18 +209,19 @@ describe("GEODT", function() {
         message: message
       };
       const result = await ethers.provider.send("eth_signTypedData",[message.from,dataToSign]);
-      console.log("success",result);
+      //console.log("success",result);
       const signature = result.substring(2);
       const r = "0x" + signature.substring(0, 64);
       const s = "0x" + signature.substring(64, 128);
       const v = parseInt(signature.substring(128, 130), 16);
-      try{
+      /**try{
         await geodt.getEth(message,r,s,v);
         expect(true).to.equal(false);
       }
       catch(error){
         expect(true).to.equal(true);
-      }
+      }**/
+      await expect(geodt.getEth(message,r,s,v)).to.be.revertedWith()
   });
   it("Rejects tx when nonce invalid",async function(){
     let message = {
@@ -232,18 +250,19 @@ describe("GEODT", function() {
       //let bsObj = {data:dataToSign};
       //let sigCall = sigUtil.signTypedData_v4(privateKeyBuffer,bsObj);
       const result = await ethers.provider.send("eth_signTypedData",[message.from,dataToSign]);
-      console.log("success",result);
+      //console.log("success",result);
       const signature = result.substring(2);
       const r = "0x" + signature.substring(0, 64);
       const s = "0x" + signature.substring(64, 128);
       const v = parseInt(signature.substring(128, 130), 16);
-      try{
+      /**try{
         await geodt.getEth(message,r,s,v);
         expect(true).to.equal(false);
       }
       catch(error){
         expect(true).to.equal(true);
-      }
+      }**/
+      await expect(geodt.getEth(message,r,s,v)).to.be.revertedWith();
   });
   it("Reject tx when signer invalid",async function(){
     let message = {
@@ -272,17 +291,123 @@ describe("GEODT", function() {
       //let bsObj = {data:dataToSign};
       //let sigCall = sigUtil.signTypedData_v4(privateKeyBuffer,bsObj);
       const result = await ethers.provider.send("eth_signTypedData",[await accounts[0].getAddress(),dataToSign]);
-      console.log("success",result);
+      //console.log("success",result);
       const signature = result.substring(2);
       const r = "0x" + signature.substring(0, 64);
       const s = "0x" + signature.substring(64, 128);
       const v = parseInt(signature.substring(128, 130), 16);
-      try{
+      /**try{
         await geodt.getEth(message,r,s,v);
         expect(true).to.equal(false);
       }
       catch(error){
         expect(true).to.equal(true);
-      }
+      }**/
+      await expect(geodt.getEth(message,r,s,v)).to.be.revertedWith();
+  });
+
+  it("Allows users to permit and swap in one go",async function(){
+
+    //give accounts[1] 1000 Dai
+    await testnetDAI.mint(await accounts[2].getAddress(),ethers.utils.parseEther("1000"));
+    //console.log("Account[2] Debited");
+
+    let messageDai = {
+      holder: await accounts[2].getAddress(),
+      spender: geodt.address,
+      nonce: 0,
+      expiry: "100000000000000000000000",
+      allowed: true
+    };
+
+    let dataToSignDai = {
+      types: {
+        EIP712Domain: domainType,
+        Permit: permitType
+      },
+      domain: daiDomainData,
+      primaryType: "Permit",
+      message: messageDai
+    };
+
+    const resultDai = await ethers.provider.send("eth_signTypedData",[messageDai.holder,dataToSignDai]);
+    //console.log("success",resultDai);
+    const signatureDai = resultDai.substring(2);
+    const rDai = "0x" + signatureDai.substring(0, 64);
+    const sDai = "0x" + signatureDai.substring(64, 128);
+    const vDai = parseInt(signatureDai.substring(128, 130), 16);
+    const permitTx = await testnetDAI.populateTransaction.permit(messageDai.holder,messageDai.spender,messageDai.nonce,
+      messageDai.expiry,messageDai.allowed,vDai,rDai,sDai);
+
+    let messageGEODT = {
+      nonce: 0,
+      from: await accounts[2].getAddress(),
+      feeReceiver: await accounts[0].getAddress(),
+      token: testnetDAI.address,
+      tokenAmount: "400000000000000000000",
+      minEth:      "900000000000000000",
+      deadline: "1000000000000000000000",
+      fee:         "100000000000000000"
+    };
+  
+    const dataToSignGEODT = {
+      types: {
+          EIP712Domain: domainType,
+          MetaTransaction: metaTransactionType
+        },
+        domain: domainData,
+        primaryType: "MetaTransaction",
+        message: messageGEODT
+      };
+
+    const resultGEODT = await ethers.provider.send("eth_signTypedData",[messageGEODT.from,dataToSignGEODT]);
+    //console.log("success",resultGEODT);
+    const signatureGEODT = resultGEODT.substring(2);
+    const rGEODT = "0x" + signatureGEODT.substring(0, 64);
+    const sGEODT = "0x" + signatureGEODT.substring(64, 128);
+    const vGEODT = parseInt(signatureGEODT.substring(128, 130), 16);
+    
+    const preBalance0 = (await accounts[0].getBalance()).sub((await geodt.estimateGas.getEthWithPermit(messageGEODT,rGEODT,sGEODT,vGEODT,permitTx.data)).mul(ethers.BigNumber.from("8000000000")));
+    const preBalance2 = await accounts[2].getBalance();
+
+    await geodt.getEthWithPermit(messageGEODT,rGEODT,sGEODT,vGEODT,permitTx.data);
+    
+    const postBalance0 = await accounts[0].getBalance();
+    const postBalance2 = await accounts[2].getBalance();
+
+    expect(postBalance2.gt(preBalance2.add(ethers.BigNumber.from("800000000000000000")))).to.equal(true);
+    expect(postBalance0.gt(preBalance0.add(ethers.BigNumber.from("100000000000000000")))).to.equal(true);
+  });
+  it("Prevents an attacker from calling transferFrom on another user", async function(){
+    let messageGEODT = {
+      nonce: 1,
+      from: await accounts[1].getAddress(),
+      feeReceiver: await accounts[0].getAddress(),
+      token: testnetDAI.address,
+      tokenAmount: "400000000000000000000",
+      minEth:      "900000000000000000",
+      deadline: "1000000000000000000000",
+      fee:         "100000000000000000"
+    };
+  
+    const dataToSignGEODT = {
+      types: {
+          EIP712Domain: domainType,
+          MetaTransaction: metaTransactionType
+        },
+        domain: domainData,
+        primaryType: "MetaTransaction",
+        message: messageGEODT
+      };
+
+    const resultGEODT = await ethers.provider.send("eth_signTypedData",[messageGEODT.from,dataToSignGEODT]);
+    //console.log("success",resultGEODT);
+    const signatureGEODT = resultGEODT.substring(2);
+    const rGEODT = "0x" + signatureGEODT.substring(0, 64);
+    const sGEODT = "0x" + signatureGEODT.substring(64, 128);
+    const vGEODT = parseInt(signatureGEODT.substring(128, 130), 16);
+
+    const attack = await testnetDAI.populateTransaction.transferFrom(await accounts[1].getAddress(),await accounts[2].getAddress(),"100000000000000000000000");
+    await expect(geodt.getEthWithPermit(messageGEODT,rGEODT,sGEODT,vGEODT,attack.data)).to.be.revertedWith();
   });
   });
